@@ -26,7 +26,7 @@ Ensure you have `dkms` and your kernel headers installed (e.g., `linux-headers` 
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/bin2yx/phytium-dwmac-dkms.git](https://github.com/bin2yx/phytium-dwmac-dkms.git)
+git clone https://github.com/bin2yx/phytium-dwmac-dkms.git
 cd phytium-dwmac-dkms
 
 # 2. Copy to DKMS source directory
