@@ -40,3 +40,9 @@ sudo dkms install -m phytium-eth -v 1.0
 
 # 4. Enable DKMS service for automatic rebuilds on kernel updates
 sudo systemctl enable dkms.service
+
+<a name="中文说明"></a>
+# 中文说明
+
+**简单来说：这是给国产飞腾电脑安装 Arch Linux 用的填坑驱动。**
+DKMS 只为方便自动更新
