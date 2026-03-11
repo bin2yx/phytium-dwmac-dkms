@@ -47,11 +47,8 @@ dwmac_phytium_parse_config_acpi(struct platform_device *pdev)
 
 	plat->phy_interface = PHY_INTERFACE_MODE_RGMII_ID;
 	
-	/* 终极真理：这其实是一张老款的 GMAC 网卡！
-	 * 纠正后，内核才能在正确的内存偏移地址找到 MAC 和 MDIO 控制器 */
+	/* 核心架构确认：这其实是一张 GMAC 网卡！ */
 	plat->core_type = DWMAC_CORE_GMAC;
-
-	/* 开启真正的时钟自动计算逻辑，适配 GMAC 架构 */
 	plat->clk_csr = -1;
 
 	if (fwnode_property_read_u32(np, "max-speed", &plat->max_speed))
@@ -60,18 +57,32 @@ dwmac_phytium_parse_config_acpi(struct platform_device *pdev)
 	plat->bus_id = 1; 
 	plat->phy_addr = -1;
 
+	/* 性能释放 1：解放 9000 字节的巨型帧 (Jumbo Frame) 和 4K FIFO 深度 */
 	plat->maxmtu = JUMBO_LEN;
 	fwnode_property_read_u32(np, "max-frame-size", &plat->maxmtu);
+	
+	fwnode_property_read_u32(np, "tx-fifo-depth", &plat->tx_fifo_size);
+	fwnode_property_read_u32(np, "rx-fifo-depth", &plat->rx_fifo_size);
+	if (plat->tx_fifo_size == 0) plat->tx_fifo_size = 4096;
+	if (plat->rx_fifo_size == 0) plat->rx_fifo_size = 4096;
+
 	fwnode_property_read_u32(np, "snps,ps-speed", &plat->mac_port_sel_speed);
+
+	/* 性能释放 2：应用 ACPI 里的多播与完美过滤表参数 */
+	fwnode_property_read_u32(np, "snps,multicast-filter-bins", &plat->multicast_filter_bins);
+	fwnode_property_read_u32(np, "snps,perfect-filter-entries", &plat->unicast_filter_entries);
 
 	dma_cfg = devm_kzalloc(dev, sizeof(*dma_cfg), GFP_KERNEL);
 	if (!dma_cfg)
 		return ERR_PTR(-ENOMEM);
 	plat->dma_cfg = dma_cfg;
 
-	dma_cfg->pbl = 16;
-	dma_cfg->txpbl = 16;
-	dma_cfg->rxpbl = 16;
+	/* 性能释放 3：严格对齐 ACPI 要求的 PBL 和 ABL 突发长度 */
+	if (fwnode_property_read_u32(np, "snps,pbl", &dma_cfg->pbl))
+		dma_cfg->pbl = 16;
+	dma_cfg->txpbl = dma_cfg->pbl;
+	dma_cfg->rxpbl = dma_cfg->pbl;
+	
 	dma_cfg->pblx8 = !fwnode_property_read_bool(np, "snps,no-pbl-x8");
 	dma_cfg->fixed_burst = true;
 	dma_cfg->aal = fwnode_property_read_bool(np, "snps,aal");
@@ -125,6 +136,7 @@ static int dwmac_phytium_probe(struct platform_device *pdev)
 	acpi_status status;
 	int ret;
 
+	/* 关键修复：装回幽灵网卡过滤器，避免探针撞墙报错 */
 	if (has_acpi_companion(&pdev->dev)) {
 		status = acpi_evaluate_integer(ACPI_HANDLE(&pdev->dev), "_UID", NULL, &uid);
 		if (ACPI_SUCCESS(status) && uid != 0) {
@@ -167,5 +179,5 @@ static struct platform_driver dwmac_phytium_driver = {
 };
 module_platform_driver(dwmac_phytium_driver);
 
-MODULE_DESCRIPTION("Phytium DWMAC Driver - Restored GMAC architecture for 6.19 API");
+MODULE_DESCRIPTION("Phytium DWMAC Driver - Ultimate 6.19 Edition (Aligned with DSDT)");
 MODULE_LICENSE("GPL v2");
