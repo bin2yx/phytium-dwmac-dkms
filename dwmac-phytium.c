@@ -19,7 +19,8 @@ static int dwmac_phytium_get_resources(struct platform_device *pdev,
 
 	stmmac_res->addr = devm_platform_ioremap_resource(pdev, 0);
 	stmmac_res->wol_irq = stmmac_res->irq;
-	stmmac_res->lpi_irq = -ENOENT;
+    // 6.19.9-1 修改
+    stmmac_res->lpi_irq = stmmac_res->irq;
 
 	return PTR_ERR_OR_ZERO(stmmac_res->addr);
 }

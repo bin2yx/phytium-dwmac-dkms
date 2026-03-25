@@ -46,3 +46,15 @@ sudo systemctl enable dkms.service
 
 **简单来说：这是给国产飞腾电脑安装 Arch Linux 用的填坑驱动。**
 DKMS 只为方便自动更新
+系统更新后网卡挂了，临时修改源文件后：
+1.make编译后
+sudo rmmod dwmac_phytium 
+sudo insmod ./dwmac-phytium.ko
+查看dmsg网卡是否没有报错，如果网卡复活
+2.添加到dkms管理
+sudo cp dwmac-phytium.c /usr/src/phytium-eth-1.0/
+sudo dkms remove -m phytium-eth -v 1.0 --all
+再执行步骤 # 3
+
+最后防止重启后系统依然从旧的引导镜像里读取那个会崩溃的旧驱动
+sudo mkinitcpio -P
