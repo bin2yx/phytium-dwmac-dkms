@@ -1,60 +1,23 @@
-# Phytium DWMAC Ethernet Driver (DKMS) for Linux 6.19+
+Phytium DWMAC Ethernet Driver (DKMS)
 
-[中文说明请见下半部分](#中文说明)
+这是专为国产飞腾平台（飞腾 FTC663 / FT-2000/4 / D2000 / 长城等整机）适配现代 Linux（如 Arch Linux ARM，内核 6.x 和 7.x+）的千兆有线网卡驱动。
 
-A DKMS-enabled Linux kernel driver for the **Phytium FTGM0001 Gigabit Ethernet MAC**, specifically patched to fix compatibility issues with Linux kernel **6.19 and newer** (e.g., on rolling-release distros like Arch Linux).
+主要修复的问题：
+1. 架构识别：修复内核升级后将千兆 GMAC 误识别为百兆老网卡、随机生成 MAC 地址以及 MDIO 注册失败的问题。
+2. 内核 ABI 兼容：自动适配新内核（Linux 6.19+ 及 7.x）中断结构体偏移变更，解决启动时申请中断失败（error -22）。
+3. 千兆丢包根治：采用 RGMII_RXID 模式，消除 1000M 高频下 MAC 与 PHY 双重发送延时叠加冲突，实现千兆线速 0 丢包、0 延迟卡顿。
+4. 电源时钟优化：修复休眠挂起时时钟双重释放报警。
 
-## 🐛 The Problem
-When upgrading to Linux kernel 6.19+, the upstream `stmmac` network driver framework underwent significant API changes (e.g., deprecation of `has_gmac` flags in favor of `core_type`). 
-Using the legacy out-of-tree driver on new kernels results in:
-- The MAC being incorrectly identified as a legacy `DWMAC100` instead of a Gigabit MAC.
-- Randomly generating MAC addresses on every boot due to reading incorrect memory offsets.
-- Fatal `error -EIO: Cannot register the MDIO bus` and PHY probe failures.
-- DMA capability overflows (`Rx/Tx FIFO size exceeds dma capability`).
-
-## 🛠️ The Solution
-This patched driver resolves these issues by:
-1. Correcting the `core_type` to `DWMAC_CORE_GMAC` to match the actual Synopsys hardware architecture (ID: 0x36), fixing memory offset reading for the MAC address and MDIO controller.
-2. Binding the `pclk` to prevent hardware registers from reading as `0x0`.
-3. Setting `clk_csr = -1` to trigger modern kernel auto-calculation for MDIO clock dividers, preventing PHY communication timeouts.
-4. Removing hardcoded FIFO depth limits to allow the kernel to auto-negotiate capabilities.
-5. Adding an ACPI `_UID` filter to skip disconnected secondary MAC interfaces.
-
-## 🚀 Installation (DKMS)
-
-Ensure you have `dkms` and your kernel headers installed (e.g., `linux-headers` on Arch).
-
-```bash
-# 1. Clone the repository
+一键安装：
 git clone https://github.com/bin2yx/phytium-dwmac-dkms.git
 cd phytium-dwmac-dkms
+sudo ./install.sh
 
-# 2. Copy to DKMS source directory
-sudo mkdir -p /usr/src/phytium-eth-1.0
-sudo cp * /usr/src/phytium-eth-1.0/
+一键卸载：
+sudo ./uninstall.sh
 
-# 3. Add, build, and install via DKMS
-sudo dkms add -m phytium-eth -v 1.0
-sudo dkms build -m phytium-eth -v 1.0
-sudo dkms install -m phytium-eth -v 1.0
+Arch Linux 用户也可以直接打包安装：
+makepkg -si
 
-# 4. Enable DKMS service for automatic rebuilds on kernel updates
-sudo systemctl enable dkms.service
-
-<a name="中文说明"></a>
-# 中文说明
-
-**简单来说：这是给国产飞腾电脑安装 Arch Linux 用的填坑驱动。**
-DKMS 只为方便自动更新
-系统更新后网卡挂了，临时修改源文件后：
-1.make编译后
-sudo rmmod dwmac_phytium 
-sudo insmod ./dwmac-phytium.ko
-查看dmsg网卡是否没有报错，如果网卡复活
-2.添加到dkms管理
-sudo cp dwmac-phytium.c /usr/src/phytium-eth-1.0/
-sudo dkms remove -m phytium-eth -v 1.0 --all
-再执行步骤 # 3
-
-最后防止重启后系统依然从旧的引导镜像里读取那个会崩溃的旧驱动
+注意：如果系统启用了引导镜像（initramfs），安装后建议执行一次更新镜像，防止开机从旧镜像加载旧驱动：
 sudo mkinitcpio -P

@@ -5,24 +5,39 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 #include "stmmac.h"
 #include "stmmac_platform.h"
+
+static int max_speed = 1000;
+module_param(max_speed, int, 0644);
+MODULE_PARM_DESC(max_speed, "Max link speed: 1000 (default) or 100");
 
 static int dwmac_phytium_get_resources(struct platform_device *pdev,
 				struct stmmac_resources *stmmac_res)
 {
+	int irq;
+
 	memset(stmmac_res, 0, sizeof(*stmmac_res));
 
-	stmmac_res->irq = platform_get_irq(pdev, 0);
-	if (stmmac_res->irq < 0)
-		return stmmac_res->irq;
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0)
+		return irq;
 
 	stmmac_res->addr = devm_platform_ioremap_resource(pdev, 0);
-	stmmac_res->wol_irq = stmmac_res->irq;
-    // 6.19.9-1 修改
-    stmmac_res->lpi_irq = stmmac_res->irq;
+	if (IS_ERR(stmmac_res->addr))
+		return PTR_ERR(stmmac_res->addr);
 
-	return PTR_ERR_OR_ZERO(stmmac_res->addr);
+	stmmac_res->irq = irq;
+	stmmac_res->wol_irq = irq;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+	stmmac_res->lpi_irq = irq;
+#endif
+	stmmac_res->sfty_irq = -ENOENT;
+	stmmac_res->sfty_ce_irq = -ENOENT;
+	stmmac_res->sfty_ue_irq = -ENOENT;
+
+	return 0;
 }
 
 static struct plat_stmmacenet_data *
@@ -46,14 +61,17 @@ dwmac_phytium_parse_config_acpi(struct platform_device *pdev)
 	if (!plat->mdio_bus_data)
 		return ERR_PTR(-ENOMEM);
 
-	plat->phy_interface = PHY_INTERFACE_MODE_RGMII_ID;
+	/* 使用 RGMII_RXID 模式：
+	 * 飞腾 GMAC 内部已具备完美的 TX 硬件延迟，PHY 芯片只需负责 RX 延迟，
+	 * 彻底消除在 1000M/125MHz DDR 高频下因双重延时叠加导致的物理丢包。 */
+	plat->phy_interface = PHY_INTERFACE_MODE_RGMII_RXID;
 	
 	/* 核心架构确认：这其实是一张 GMAC 网卡！ */
 	plat->core_type = DWMAC_CORE_GMAC;
 	plat->clk_csr = -1;
 
 	if (fwnode_property_read_u32(np, "max-speed", &plat->max_speed))
-		plat->max_speed = 1000;
+		plat->max_speed = max_speed;
 
 	plat->bus_id = 1; 
 	plat->phy_addr = -1;
@@ -97,6 +115,7 @@ dwmac_phytium_parse_config_acpi(struct platform_device *pdev)
 	if (!axi)
 		return ERR_PTR(-ENOMEM);
 	plat->axi = axi;
+	// 此处设定为1，遵循“大道至简”原则
 	axi->axi_wr_osr_lmt = 1;
 	axi->axi_rd_osr_lmt = 1;
 	axi->axi_fb = true;
@@ -120,7 +139,7 @@ dwmac_phytium_parse_config_acpi(struct platform_device *pdev)
 
 	devm_clk_hw_register_clkdev(dev, clk_hw, NULL, dev_name(dev));
 	plat->stmmac_clk = clk_hw->clk;
-	plat->pclk = clk_hw->clk; 
+	plat->pclk = NULL; 
 
 	ret = clk_prepare_enable(plat->stmmac_clk);
 	if (ret)
@@ -180,5 +199,5 @@ static struct platform_driver dwmac_phytium_driver = {
 };
 module_platform_driver(dwmac_phytium_driver);
 
-MODULE_DESCRIPTION("Phytium DWMAC Driver - Ultimate 6.19 Edition (Aligned with DSDT)");
+MODULE_DESCRIPTION("Phytium DWMAC Driver - Ultimate Edition (Aligned with DSDT & Kernel 6.x/7.x)");
 MODULE_LICENSE("GPL v2");

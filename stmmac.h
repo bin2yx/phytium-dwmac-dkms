@@ -1,3 +1,4 @@
+#include <linux/version.h>
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*******************************************************************************
   Copyright (C) 2007-2009  STMicroelectronics Ltd
@@ -29,7 +30,9 @@ struct stmmac_resources {
 	void __iomem *addr;
 	u8 mac[ETH_ALEN];
 	int wol_irq;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 	int lpi_irq;
+#endif
 	int irq;
 	int sfty_irq;
 	int sfty_ce_irq;
@@ -314,7 +317,9 @@ struct stmmac_priv {
 	bool wol_irq_disabled;
 	int clk_csr;
 	struct timer_list eee_ctrl_timer;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 	int lpi_irq;
+#endif
 	int eee_enabled;
 	int eee_active;
 	int tx_lpi_timer;
